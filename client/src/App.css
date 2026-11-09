@@ -3995,3 +3995,18 @@ button {
   background: rgba(146, 117, 245, .35);
   color: #ffffff;
 }
+
+/* Authentication recovery */
+.auth-forgot-link {
+  align-self: flex-end;
+  margin-top: -8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #9294ff;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.auth-forgot-link:hover { color: #c1c2ff; text-decoration: underline; }

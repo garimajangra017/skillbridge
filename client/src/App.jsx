@@ -126,11 +126,13 @@ function getProjectOwner(project) {
 }
 
 function App() {
-  const [user, setUser] = useState(readSavedUser);
-  const [page, setPage] = useState(
-    readSavedUser() ? "Dashboard" : "Home"
-  );
-  const [authMode, setAuthMode] = useState("login");
+  const initialResetToken = new URLSearchParams(window.location.search).get("resetToken");
+  const [user, setUser] = useState(() => initialResetToken ? null : readSavedUser());
+  const [page, setPage] = useState(() => initialResetToken ? "Home" : (readSavedUser() ? "Dashboard" : "Home"));
+  const [authMode, setAuthMode] = useState(initialResetToken ? "reset" : "login");
+  const [resetToken, setResetToken] = useState(initialResetToken || "");
+  const [resetPassword, setResetPassword] = useState("");
+  const [confirmResetPassword, setConfirmResetPassword] = useState("");
   const [authForm, setAuthForm] = useState({
     name: "",
     email: "",
@@ -214,6 +216,52 @@ function App() {
     setPage(nextPage);
     setSearch("");
     setSelectedProject(null);
+  }
+
+  async function handleForgotPassword(event) {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      const data = await request("/auth/forgot-password", {
+        method: "POST",
+        body: JSON.stringify({ email: authForm.email }),
+      });
+      showNotice(data.message || "If an account exists, a reset link has been sent.");
+      setAuthMode("login");
+    } catch (error) {
+      showNotice(error.message || "Could not send the reset link.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleResetPassword(event) {
+    event.preventDefault();
+    if (resetPassword.length < 8) {
+      showNotice("New password must be at least 8 characters long.");
+      return;
+    }
+    if (resetPassword !== confirmResetPassword) {
+      showNotice("Passwords do not match.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const data = await request("/auth/reset-password", {
+        method: "POST",
+        body: JSON.stringify({ token: resetToken, password: resetPassword }),
+      });
+      window.history.replaceState({}, document.title, window.location.pathname);
+      setResetToken("");
+      setResetPassword("");
+      setConfirmResetPassword("");
+      setAuthMode("login");
+      showNotice(data.message || "Password updated successfully. Please sign in.");
+    } catch (error) {
+      showNotice(error.message || "Could not reset your password.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function handleAuth(event) {
@@ -633,89 +681,74 @@ function App() {
           <section className="auth-panel">
             <div className="auth-card">
               <span className="eyebrow">
-                {authMode === "login" ? "WELCOME BACK" : "START YOUR JOURNEY"}
+                {authMode === "register" ? "START YOUR JOURNEY" : authMode === "forgot" ? "ACCOUNT RECOVERY" : authMode === "reset" ? "SECURE YOUR ACCOUNT" : "WELCOME BACK"}
               </span>
 
               <h2>
-                {authMode === "login"
-                  ? "Sign in to SkillBridge"
-                  : "Create your account"}
+                {authMode === "register" ? "Create your account" : authMode === "forgot" ? "Forgot your password?" : authMode === "reset" ? "Create a new password" : "Sign in to SkillBridge"}
               </h2>
 
               <p className="muted">
-                {authMode === "login"
-                  ? "Pick up where your next big idea begins."
-                  : "Join students who love learning and building."}
+                {authMode === "register" ? "Join students who love learning and building." : authMode === "forgot" ? "Enter your registered email and we will send you a secure reset link." : authMode === "reset" ? "Choose a strong new password for your SkillBridge account." : "Pick up where your next big idea begins."}
               </p>
 
-              <form onSubmit={handleAuth} className="form-stack">
-                {authMode === "register" && (
+              {authMode === "forgot" ? (
+                <form onSubmit={handleForgotPassword} className="form-stack">
                   <label>
-                    Full name
-                    <input
-                      required
-                      value={authForm.name}
-                      onChange={(event) =>
-                        setAuthForm({ ...authForm, name: event.target.value })
-                      }
-                      placeholder="Enter your name"
-                    />
+                    Email address
+                    <input required type="email" value={authForm.email} onChange={(event) => setAuthForm({ ...authForm, email: event.target.value })} placeholder="you@example.com" />
                   </label>
-                )}
+                  <button className="primary-button full-button" disabled={busy}>{busy ? "Sending..." : "Send reset link →"}</button>
+                </form>
+              ) : authMode === "reset" ? (
+                <form onSubmit={handleResetPassword} className="form-stack">
+                  <label>
+                    New password
+                    <input required minLength={8} type="password" autoComplete="new-password" value={resetPassword} onChange={(event) => setResetPassword(event.target.value)} placeholder="At least 8 characters" />
+                  </label>
+                  <label>
+                    Confirm new password
+                    <input required minLength={8} type="password" autoComplete="new-password" value={confirmResetPassword} onChange={(event) => setConfirmResetPassword(event.target.value)} placeholder="Enter password again" />
+                  </label>
+                  <button className="primary-button full-button" disabled={busy}>{busy ? "Updating..." : "Update password →"}</button>
+                </form>
+              ) : (
+                <form onSubmit={handleAuth} className="form-stack">
+                  {authMode === "register" && (
+                    <label>
+                      Full name
+                      <input required value={authForm.name} onChange={(event) => setAuthForm({ ...authForm, name: event.target.value })} placeholder="Enter your name" />
+                    </label>
+                  )}
 
-                <label>
-                  Email address
-                  <input
-                    required
-                    type="email"
-                    value={authForm.email}
-                    onChange={(event) =>
-                      setAuthForm({ ...authForm, email: event.target.value })
-                    }
-                    placeholder="you@example.com"
-                  />
-                </label>
+                  <label>
+                    Email address
+                    <input required type="email" value={authForm.email} onChange={(event) => setAuthForm({ ...authForm, email: event.target.value })} placeholder="you@example.com" />
+                  </label>
 
-                <label>
-                  Password
-                  <input
-                    required
-                    minLength={6}
-                    type="password"
-                    value={authForm.password}
-                    onChange={(event) =>
-                      setAuthForm({
-                        ...authForm,
-                        password: event.target.value,
-                      })
-                    }
-                    placeholder="At least 6 characters"
-                  />
-                </label>
+                  <label>
+                    Password
+                    <input required minLength={6} type="password" autoComplete={authMode === "login" ? "current-password" : "new-password"} value={authForm.password} onChange={(event) => setAuthForm({ ...authForm, password: event.target.value })} placeholder="At least 6 characters" />
+                  </label>
 
-                <button className="primary-button full-button" disabled={busy}>
-                  {busy
-                    ? "Please wait..."
-                    : authMode === "login"
-                      ? "Sign in →"
-                      : "Create account →"}
-                </button>
-              </form>
+                  {authMode === "login" && (
+                    <button type="button" className="auth-forgot-link" onClick={() => setAuthMode("forgot")}>Forgot password?</button>
+                  )}
+
+                  <button className="primary-button full-button" disabled={busy}>
+                    {busy ? "Please wait..." : authMode === "login" ? "Sign in →" : "Create account →"}
+                  </button>
+                </form>
+              )}
 
               <p className="auth-switch">
-                {authMode === "login"
-                  ? "New to SkillBridge?"
-                  : "Already have an account?"}{" "}
-                <button
-                  onClick={() =>
-                    setAuthMode(authMode === "login" ? "register" : "login")
-                  }
-                >
-                  {authMode === "login" ? "Create an account" : "Sign in"}
+                {authMode === "register" ? "Already have an account?" : authMode === "login" ? "New to SkillBridge?" : "Remembered your password?"}{" "}
+                <button type="button" onClick={() => setAuthMode(authMode === "register" ? "login" : "login")}>
+                  {authMode === "register" ? "Sign in" : "Back to sign in"}
                 </button>
               </p>
 
-              <button className="back-home" onClick={() => setPage("Home")}>
+              <button className="back-home" onClick={() => { setAuthMode("login"); setPage("Home"); }}>
                 ← Back to home
               </button>
             </div>
