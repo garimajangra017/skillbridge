@@ -9,7 +9,9 @@ const userSchema = new mongoose.Schema({
   avatar: { type: String, default: "" },
   github: { type: String, default: "" },
   linkedin: { type: String, default: "" },
-  role: { type: String, default: "Student" }
+  role: { type: String, default: "Student" },
+  passwordResetToken: { type: String, default: null, select: false },
+  passwordResetExpires: { type: Date, default: null, select: false }
 }, { timestamps: true });
 
 module.exports = mongoose.models.User || mongoose.model("User", userSchema);
